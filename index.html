@@ -188,7 +188,7 @@
 
         peer.on('open', () => {
             // Call the sharer. We don't send a stream (one-way), we just listen.
-            const call = peer.call(targetId, new MediaStream());
+            const call = peer.call(targetId);
             
             connectToStreamBtn.innerText = "Connecting...";
 

@@ -236,47 +236,36 @@
         });
     });
 
-    startShareBtn.addEventListener('click', async () => {
-        try {
-            // Read chosen settings
-            const is720p = qualitySelect.value === "720";
-            
-            const constraints = is720p ? {
-                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, min: 30 } },
-                audio: { echoCancellation: false, noiseSuppression: false }
-            } : {
-                video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60, min: 30 } },
-                audio: { echoCancellation: false, noiseSuppression: false }
-            };
+   startShareBtn.addEventListener('click', async () => {
+    try {
+        const is720p = qualitySelect.value === "720";
+        
+        // Removed 'min' constraints and kept 'ideal'
+        const constraints = is720p ? {
+            video: { 
+                width: { ideal: 1280 }, 
+                height: { ideal: 720 }, 
+                frameRate: { ideal: 60 } 
+            },
+            audio: { echoCancellation: false, noiseSuppression: false }
+        } : {
+            video: { 
+                width: { ideal: 1920 }, 
+                height: { ideal: 1080 }, 
+                frameRate: { ideal: 60 } 
+            },
+            audio: { echoCancellation: false, noiseSuppression: false }
+        };
 
-            const newStream = await navigator.mediaDevices.getDisplayMedia(constraints);
-            
-            // Apply Content Hint (Motion for games, Detail for desktop/text)
-            const videoTrack = newStream.getVideoTracks()[0];
-            if ("contentHint" in videoTrack) {
-                videoTrack.contentHint = is720p ? "motion" : "detail";
-            }
-
-            localStream = newStream;
-            startShareBtn.innerText = "📺 Screen Capturing Active";
-            startShareBtn.style.backgroundColor = "#03dac6";
-            
-            sharerPreviewContainer.style.display = 'block';
-            localPreview.srcObject = localStream;
-
-            // If a stream is already running, seamlessly swap the track without dropping the call!
-            if (activeCall && activeCall.peerConnection) {
-                const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                if (sender) {
-                    sender.replaceTrack(videoTrack);
-                }
-                updateBandwidth();
-            }
-
-        } catch (err) {
-            console.error("Screen capture error:", err);
-        }
-    });
+        const newStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+        
+        // ... rest of your existing logic ...
+        localStream = newStream;
+        // ...
+    } catch (err) {
+        console.error("Screen capture error:", err);
+    }
+});
 
     // --- VIEWER LOGIC ---
     const peerIdInput = document.getElementById('peerIdInput');

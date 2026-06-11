@@ -3,47 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Screenshare</title>
+    <title>Advanced Interactive Screenshare</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #121212;
-            color: #e0e0e0;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            background-color: #121212; color: #e0e0e0;
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
         }
         .container { width: 100%; max-width: 900px; }
         h1 { color: #ffffff; text-align: center; margin-bottom: 20px; }
         
         .card {
-            background-color: #1e1e1e;
-            border: 1px solid #2d2d2d;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
+            background-color: #1e1e1e; border: 1px solid #2d2d2d;
+            border-radius: 8px; padding: 20px; margin-bottom: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
         h2 { margin-top: 0; color: #bb86fc; font-size: 1.2rem; }
         p { color: #a0a0a0; font-size: 0.95rem; line-height: 1.5; }
         
         .status-box {
-            background-color: #2a2a2a;
-            padding: 10px;
-            border-radius: 4px;
-            font-family: monospace;
-            word-break: break-all;
-            margin: 10px 0;
-            border-left: 4px solid #03dac6;
+            background-color: #2a2a2a; padding: 10px; border-radius: 4px;
+            font-family: monospace; word-break: break-all;
+            margin: 10px 0; border-left: 4px solid #03dac6;
         }
-        input[type="text"] {
+        
+        input[type="text"], select {
             width: 100%; padding: 10px; background-color: #2d2d2d;
             border: 1px solid #444; border-radius: 4px; color: #fff;
-            box-sizing: border-box; margin-bottom: 10px;
+            box-sizing: border-box; margin-top: 5px; margin-bottom: 15px;
         }
+        input[type="range"] { width: 100%; margin-top: 10px; cursor: pointer; }
+        
         button {
             background-color: #bb86fc; color: #121212; border: none;
             padding: 10px 20px; font-weight: bold; border-radius: 4px;
@@ -58,23 +50,18 @@
         }
         video { width: 100%; display: block; cursor: crosshair; }
         
-        /* The Red Click Pointer */
         .click-pointer {
-            position: absolute;
-            width: 20px; height: 20px;
+            position: absolute; width: 20px; height: 20px;
             background-color: rgba(255, 0, 0, 0.7);
             border: 2px solid white; border-radius: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            animation: fadeOut 1.5s forwards;
-            z-index: 100;
+            transform: translate(-50%, -50%); pointer-events: none;
+            animation: fadeOut 1.5s forwards; z-index: 100;
         }
         @keyframes fadeOut {
             0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
             100% { opacity: 0; transform: translate(-50%, -50%) scale(2); }
         }
 
-        /* Toggle Switch Styling */
         .toggle-card {
             display: flex; justify-content: center; align-items: center;
             background-color: #2a2a2a; border-left: 4px solid #bb86fc;
@@ -84,12 +71,13 @@
             display: flex; align-items: center; gap: 10px;
         }
         .toggle-label input { transform: scale(1.5); cursor: pointer; }
+        .setting-group { margin-bottom: 15px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🌐 Interactive Screenshare</h1>
+    <h1>🌐 Advanced Interactive Screenshare</h1>
 
     <div class="card toggle-card">
         <label class="toggle-label">
@@ -108,6 +96,24 @@
         </div>
 
         <div class="card">
+            <h2>Stream Settings</h2>
+            
+            <div class="setting-group">
+                <label for="qualitySelect">Resolution & Optimization:</label>
+                <select id="qualitySelect">
+                    <option value="720" selected>720p Smooth (Optimized for 60fps Gaming / Action)</option>
+                    <option value="1080">1080p High Quality (Optimized for Crisp Text / Details)</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label for="bwSlider">Max Video Bandwidth: <span id="bwLabel">4000</span> Kbps</label>
+                <input type="range" id="bwSlider" min="500" max="10000" step="500" value="4000">
+                <p style="margin-top: 5px; font-size: 0.8rem;">Lower this if the viewer's stream is freezing or your internet is lagging.</p>
+            </div>
+        </div>
+
+        <div class="card">
             <h2>Host Controls</h2>
             <p>Click below to generate your unique Sharing ID. Give this to your viewer.</p>
             <button id="initSharerBtn">Generate Sharing ID</button>
@@ -115,14 +121,13 @@
             <div id="sharerStatusPanel" style="display:none;">
                 <p>Your Sharing ID is:</p>
                 <div class="status-box" id="myIdDisplay">Connecting to server...</div>
-                <button id="startShareBtn" disabled>1. Start Screen Capture</button>
+                <button id="startShareBtn" disabled>Start / Update Screen Capture</button>
             </div>
         </div>
     </div>
 
 
     <div id="viewerUI">
-        
         <div class="card">
             <h2>Live Stream (Click anywhere to point!)</h2>
             <div class="video-container">
@@ -159,6 +164,7 @@
     // --- SHARED VARIABLES ---
     let peer = null;
     let localStream = null;
+    let activeCall = null; // We need to track the active call to adjust its bandwidth
 
     // --- SHARER LOGIC ---
     const initSharerBtn = document.getElementById('initSharerBtn');
@@ -169,6 +175,31 @@
     const sharerPreviewContainer = document.getElementById('sharerPreviewContainer');
     const localPreview = document.getElementById('localPreview');
     const pointerOverlay = document.getElementById('pointerOverlay');
+
+    const qualitySelect = document.getElementById('qualitySelect');
+    const bwSlider = document.getElementById('bwSlider');
+    const bwLabel = document.getElementById('bwLabel');
+
+    // Bandwidth Limiter Function
+    function updateBandwidth() {
+        const kbps = parseInt(bwSlider.value);
+        bwLabel.innerText = kbps;
+
+        // If we have an active connection, dynamically apply the new limit
+        if (activeCall && activeCall.peerConnection) {
+            const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) {
+                const params = sender.getParameters();
+                if (!params.encodings) params.encodings = [{}];
+                // WebRTC expects maxBitrate in bits-per-second (bps), so multiply by 1000
+                params.encodings[0].maxBitrate = kbps * 1000;
+                sender.setParameters(params).catch(console.error);
+            }
+        }
+    }
+
+    // Listen for slider changes
+    bwSlider.addEventListener('input', updateBandwidth);
 
     initSharerBtn.addEventListener('click', () => {
         initSharerBtn.style.display = 'none';
@@ -183,7 +214,12 @@
 
         peer.on('connection', (conn) => {
             conn.on('open', () => {
-                if (localStream) peer.call(conn.peer, localStream);
+                if (localStream) {
+                    activeCall = peer.call(conn.peer, localStream);
+                    
+                    // Apply bandwidth settings immediately after connection
+                    setTimeout(updateBandwidth, 500); 
+                }
             });
 
             // Listen for clicks from the Viewer
@@ -202,17 +238,43 @@
 
     startShareBtn.addEventListener('click', async () => {
         try {
-            localStream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }, 
-                audio: true 
-            });
+            // Read chosen settings
+            const is720p = qualitySelect.value === "720";
+            
+            const constraints = is720p ? {
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, min: 30 } },
+                audio: { echoCancellation: false, noiseSuppression: false }
+            } : {
+                video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60, min: 30 } },
+                audio: { echoCancellation: false, noiseSuppression: false }
+            };
+
+            const newStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+            
+            // Apply Content Hint (Motion for games, Detail for desktop/text)
+            const videoTrack = newStream.getVideoTracks()[0];
+            if ("contentHint" in videoTrack) {
+                videoTrack.contentHint = is720p ? "motion" : "detail";
+            }
+
+            localStream = newStream;
             startShareBtn.innerText = "📺 Screen Capturing Active";
             startShareBtn.style.backgroundColor = "#03dac6";
             
             sharerPreviewContainer.style.display = 'block';
             localPreview.srcObject = localStream;
+
+            // If a stream is already running, seamlessly swap the track without dropping the call!
+            if (activeCall && activeCall.peerConnection) {
+                const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) {
+                    sender.replaceTrack(videoTrack);
+                }
+                updateBandwidth();
+            }
+
         } catch (err) {
-            console.error(err);
+            console.error("Screen capture error:", err);
         }
     });
 
@@ -221,10 +283,7 @@
     const connectToStreamBtn = document.getElementById('connectToStreamBtn');
     const remoteVideo = document.getElementById('remoteVideo');
 
-    // BUG FIX: Prevent the video from pausing when the viewer clicks it
-    remoteVideo.addEventListener('pause', () => {
-        remoteVideo.play(); 
-    });
+    remoteVideo.addEventListener('pause', () => { remoteVideo.play(); });
 
     connectToStreamBtn.addEventListener('click', () => {
         const targetId = peerIdInput.value.trim();
@@ -248,7 +307,7 @@
                 });
             });
 
-            // Capture Viewer Clicks and send them
+            // Capture Viewer Clicks and send them via Data Channel
             remoteVideo.addEventListener('click', (e) => {
                 if (!isDataChannelOpen) return;
 

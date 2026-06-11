@@ -183,24 +183,32 @@
             return;
         }
 
-        // Viewers also need a temporary peer instance to initiate the link
         peer = new Peer();
 
         peer.on('open', () => {
-            // Call the sharer. We don't send a stream (one-way), we just listen.
-            const call = peer.call(targetId);
-            
+            // FIX: Removed the empty MediaStream argument
+            const call = peer.call(targetId); 
             connectToStreamBtn.innerText = "Connecting...";
 
+            // ADDED: Network debugging logs
+            call.peerConnection.onconnectionstatechange = () => {
+                console.log("Network State:", call.peerConnection.connectionState);
+                if (call.peerConnection.connectionState === 'failed') {
+                    alert("Network blocked the Peer-to-Peer connection!");
+                    connectToStreamBtn.innerText = "Connection Failed";
+                }
+            };
+
             call.on('stream', (incomingStream) => {
+                console.log("Stream received successfully!");
                 connectToStreamBtn.innerText = "Connected!";
                 connectToStreamBtn.style.backgroundColor = "#03dac6";
                 remoteVideo.srcObject = incomingStream;
             });
 
             call.on('error', (err) => {
-                console.error(err);
-                alert("Connection failed. Check the ID and try again.");
+                console.error("PeerJS Error:", err);
+                alert("Connection failed. Check console.");
                 connectToStreamBtn.innerText = "Connect & Watch";
             });
         });

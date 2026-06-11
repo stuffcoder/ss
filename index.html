@@ -160,6 +160,11 @@
     const peerIdInput = document.getElementById('peerIdInput');
     const connectToStreamBtn = document.getElementById('connectToStreamBtn');
     const remoteVideo = document.getElementById('remoteVideo');
+    
+    // New Elements
+    const sharerPreviewContainer = document.getElementById('sharerPreviewContainer');
+    const localPreview = document.getElementById('localPreview');
+    const pointerOverlay = document.getElementById('pointerOverlay');
 
     // --- SHARER LOGIC ---
     initSharerBtn.addEventListener('click', () => {
@@ -173,14 +178,28 @@
             startShareBtn.disabled = false;
         });
 
-        // Listen for a "ping" from a Viewer
+        // Listen for a connection from the Viewer
         peer.on('connection', (conn) => {
             conn.on('open', () => {
                 if (localStream) {
-                    // We have a stream! Call the Viewer back with the video.
                     peer.call(conn.peer, localStream);
-                } else {
-                    console.log("Viewer connected, but screen capture isn't active yet.");
+                }
+            });
+
+            // LISTEN FOR CLICK DATA FROM VIEWER
+            conn.on('data', (data) => {
+                if (data.type === 'click') {
+                    // Create a dot element
+                    const dot = document.createElement('div');
+                    dot.className = 'click-pointer';
+                    // Position it based on the percentages sent by the viewer
+                    dot.style.left = `${data.x * 100}%`;
+                    dot.style.top = `${data.y * 100}%`;
+                    
+                    pointerOverlay.appendChild(dot);
+
+                    // Clean it up after the animation finishes (1.5 seconds)
+                    setTimeout(() => dot.remove(), 1500);
                 }
             });
         });
@@ -188,16 +207,23 @@
 
     startShareBtn.addEventListener('click', async () => {
         try {
+            // High Quality & Framerate Constraints
             localStream = await navigator.mediaDevices.getDisplayMedia({ 
                 video: {
-                    width: { ideal: 1920, max: 1920 },
-                    height: { ideal: 1080, max: 1080 },
+                    width: { ideal: 1920, max: 3840 },
+                    height: { ideal: 1080, max: 2160 },
                     frameRate: { ideal: 60, max: 60 }
                 }, 
                 audio: true 
             });
+            
             startShareBtn.innerText = "📺 Screen Capturing Active";
             startShareBtn.style.backgroundColor = "#03dac6";
+            
+            // Show the local preview to the sharer
+            sharerPreviewContainer.style.display = 'block';
+            localPreview.srcObject = localStream;
+
         } catch (err) {
             console.error("Failed to get screen stream", err);
         }
@@ -209,22 +235,38 @@
         if (!targetId) return alert("Please enter a valid Sharing ID.");
 
         connectToStreamBtn.innerText = "Connecting...";
-        peer = new Peer(); // Create the Viewer's peer
+        peer = new Peer(); 
 
         peer.on('open', () => {
-            // 1. Send a text ping to the Sharer
             const conn = peer.connect(targetId);
-            
-            // 2. Wait for the Sharer to call us back with the video
-            peer.on('call', (call) => {
-                // Answer the call without sending any video back
-                call.answer(); 
+            let isDataChannelOpen = false;
 
+            conn.on('open', () => {
+                isDataChannelOpen = true; // Connection is ready for text data
+            });
+            
+            peer.on('call', (call) => {
+                call.answer(); 
                 call.on('stream', (incomingStream) => {
                     connectToStreamBtn.innerText = "Connected!";
                     connectToStreamBtn.style.backgroundColor = "#03dac6";
                     remoteVideo.srcObject = incomingStream;
                 });
+            });
+
+            // SEND CLICKS TO THE SHARER
+            remoteVideo.addEventListener('click', (e) => {
+                if (!isDataChannelOpen) return;
+
+                // Get the exact dimensions of the video player on the viewer's screen
+                const rect = remoteVideo.getBoundingClientRect();
+                
+                // Calculate click position as a decimal percentage (0.0 to 1.0)
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+
+                // Send the data over the PeerJS connection
+                conn.send({ type: 'click', x: x, y: y });
             });
 
             conn.on('error', () => {

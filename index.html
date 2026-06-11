@@ -93,6 +93,23 @@
             width: 100%;
             display: block;
         }
+        .click-pointer {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(255, 0, 0, 0.7);
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none; /* So it doesn't block other clicks */
+            animation: fadeOut 1.5s forwards;
+            z-index: 100;
+        }
+
+        @keyframes fadeOut {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(2); }
+        }
     </style>
 </head>
 <body>
@@ -109,6 +126,12 @@
             <div class="status-box" id="myIdDisplay">Connecting to server...</div>
             <button id="startShareBtn" disabled>Start Screen Capture</button>
         </div>
+        <div id="sharerPreviewContainer" class="video-container" style="display:none; margin-top: 15px;">
+            <p style="text-align:center; margin: 5px 0;">Your Screen (Watch here for clicks)</p>
+            <div id="pointerOverlay" style="position: relative; width: 100%;">
+        <video id="localPreview" autoplay muted playsinline style="width: 100%;"></video>
+    </div>
+</div>
     </div>
 
     <div class="card">

@@ -115,11 +115,12 @@
 
         <div class="card">
             <h2>Host Controls</h2>
-            <p>Click below to generate your unique Sharing ID. Give this to your viewer.</p>
-            <button id="initSharerBtn">Generate Sharing ID</button>
+            <p>Type a custom Room Name / Short ID below, or leave it blank to auto-generate one.</p>
+            <input type="text" id="customIdInput" placeholder="e.g., retro-gaming, lab-stream (Letters/numbers only)">
+            <button id="initSharerBtn">Create Room</button>
             
             <div id="sharerStatusPanel" style="display:none;">
-                <p>Your Sharing ID is:</p>
+                <p>Your Active Sharing ID is:</p>
                 <div class="status-box" id="myIdDisplay">Connecting to server...</div>
                 <button id="startShareBtn" disabled>Start / Update Screen Capture</button>
             </div>
@@ -164,9 +165,10 @@
     // --- SHARED VARIABLES ---
     let peer = null;
     let localStream = null;
-    let activeCall = null; // We need to track the active call to adjust its bandwidth
+    let activeCall = null; 
 
     // --- SHARER LOGIC ---
+    const customIdInput = document.getElementById('customIdInput');
     const initSharerBtn = document.getElementById('initSharerBtn');
     const sharerStatusPanel = document.getElementById('sharerStatusPanel');
     const myIdDisplay = document.getElementById('myIdDisplay');
@@ -180,49 +182,71 @@
     const bwSlider = document.getElementById('bwSlider');
     const bwLabel = document.getElementById('bwLabel');
 
+    // Helper for fallback short auto-IDs if user skips typing one
+    function generateFallbackId(length = 6) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+
     // Bandwidth Limiter Function
     function updateBandwidth() {
         const kbps = parseInt(bwSlider.value);
         bwLabel.innerText = kbps;
 
-        // If we have an active connection, dynamically apply the new limit
         if (activeCall && activeCall.peerConnection) {
             const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
                 const params = sender.getParameters();
                 if (!params.encodings) params.encodings = [{}];
-                // WebRTC expects maxBitrate in bits-per-second (bps), so multiply by 1000
                 params.encodings[0].maxBitrate = kbps * 1000;
                 sender.setParameters(params).catch(console.error);
             }
         }
     }
 
-    // Listen for slider changes
     bwSlider.addEventListener('input', updateBandwidth);
 
     initSharerBtn.addEventListener('click', () => {
+        // Sanitize choice or spin up a quick unique shortcode fallback
+        let targetId = customIdInput.value.trim().replace(/[^a-zA-Z0-9-_]/g, '');
+        if (!targetId) {
+            targetId = generateFallbackId(6);
+        }
+
         initSharerBtn.style.display = 'none';
+        customIdInput.style.display = 'none';
         sharerStatusPanel.style.display = 'block';
 
-        peer = new Peer();
+        // Initialize PeerJS explicitly passing the chosen user/short code configuration
+        peer = new Peer(targetId);
 
         peer.on('open', (id) => {
             myIdDisplay.innerText = id;
             startShareBtn.disabled = false;
         });
 
+        // Error catching for identical room/ID clashes
+        peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') {
+                alert("That custom ID or room name is already active on the network. Please choose another or try refreshing.");
+                location.reload();
+            } else {
+                console.error("Peer error:", err);
+            }
+        });
+
         peer.on('connection', (conn) => {
             conn.on('open', () => {
                 if (localStream) {
                     activeCall = peer.call(conn.peer, localStream);
-                    
-                    // Apply bandwidth settings immediately after connection
                     setTimeout(updateBandwidth, 500); 
                 }
             });
 
-            // Listen for clicks from the Viewer
             conn.on('data', (data) => {
                 if (data.type === 'click') {
                     const dot = document.createElement('div');
@@ -239,29 +263,20 @@
    startShareBtn.addEventListener('click', async () => {
     try {
         const is720p = qualitySelect.value === "720";
-        
-        // Removed 'min' constraints and kept 'ideal'
         const constraints = is720p ? {
-            video: { 
-                width: { ideal: 1280 }, 
-                height: { ideal: 720 }, 
-                frameRate: { ideal: 60 } 
-            },
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 } },
             audio: { echoCancellation: false, noiseSuppression: false }
         } : {
-            video: { 
-                width: { ideal: 1920 }, 
-                height: { ideal: 1080 }, 
-                frameRate: { ideal: 60 } 
-            },
+            video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } },
             audio: { echoCancellation: false, noiseSuppression: false }
         };
 
         const newStream = await navigator.mediaDevices.getDisplayMedia(constraints);
-        
-        // ... rest of your existing logic ...
         localStream = newStream;
-        // ...
+        
+        // Show local preview so streamer can view incoming data clicks overlayed
+        localPreview.srcObject = newStream;
+        sharerPreviewContainer.style.display = 'block';
     } catch (err) {
         console.error("Screen capture error:", err);
     }
@@ -296,7 +311,6 @@
                 });
             });
 
-            // Capture Viewer Clicks and send them via Data Channel
             remoteVideo.addEventListener('click', (e) => {
                 if (!isDataChannelOpen) return;
 

@@ -87,7 +87,7 @@
     </div>
 
     <script>
-        let rows = 4;
+        let rows = 3;
         let cols = 3;
         let gridState = []; // 2D array of 0 or 1
         let targetMode = 'all_on'; // 'all_on' or 'all_off'
@@ -98,13 +98,12 @@
         }
 
         function loadSamplePreset() {
-            if (rows === 4 && cols === 3) {
+            if (rows === 3 && cols === 3) {
                 // Preset matching user's specific image screenshot state
                 gridState = [
                     [0, 0, 0],
                     [0, 0, 0],
-                    [0, 1, 0],
-                    [1, 1, 1]
+                    [0, 1, 0]
                 ];
             } else {
                 initGridData();

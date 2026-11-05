@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Screenshare - Channels</title>
+    <title>Advanced Interactive Screenshare</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         body {
@@ -18,7 +18,7 @@
         
         .app-layout {
             display: grid;
-            grid-template-columns: 320px 1fr;
+            grid-template-columns: 340px 1fr;
             gap: 20px;
             flex: 1;
             align-items: start;
@@ -32,7 +32,7 @@
         }
 
         .main-content {
-            display: flex; flex-direction: column; height: 100%;
+            display: flex; flex-direction: column; height: 100%; flex: 1;
         }
 
         .card {
@@ -61,16 +61,27 @@
         
         button {
             background-color: #bb86fc; color: #121212; border: none;
-            padding: 6px 12px; font-weight: bold; border-radius: 4px;
+            padding: 8px 12px; font-weight: bold; border-radius: 4px;
             cursor: pointer; transition: background-color 0.2s; flex: 1;
             font-size: 0.9rem;
         }
         button:hover { background-color: #9965db; }
         button.join-btn { background-color: #03dac6; }
         button.join-btn:hover { background-color: #018786; }
-        button.danger-btn { background-color: #cf6679; color: #fff; }
-        button.danger-btn:hover { background-color: #b05263; }
         button:disabled { background-color: #444; color: #777; cursor: not-allowed; }
+        
+        .status-box {
+            background-color: #2a2a2a; padding: 8px; border-radius: 4px;
+            font-family: monospace; word-break: break-all;
+            margin: 5px 0; border-left: 4px solid #03dac6; font-size: 0.85rem;
+        }
+        
+        input[type="text"], select {
+            width: 100%; padding: 8px; background-color: #2d2d2d;
+            border: 1px solid #444; border-radius: 4px; color: #fff;
+            box-sizing: border-box; margin-top: 4px; font-size: 0.9rem;
+        }
+        input[type="range"] { width: 100%; margin-top: 5px; cursor: pointer; }
         
         .video-container {
             position: relative; width: 100%; background: #000;
@@ -80,10 +91,6 @@
         }
         video { width: 100%; height: 100%; object-fit: contain; display: block; cursor: crosshair; }
         
-        .placeholder-text {
-            position: absolute; color: #666; font-size: 1.1rem; text-align: center; padding: 20px;
-        }
-
         .click-pointer {
             position: absolute; width: 20px; height: 20px;
             background-color: rgba(255, 0, 0, 0.7);
@@ -98,30 +105,22 @@
 
         .setting-group { margin-bottom: 10px; }
         .setting-group:last-child { margin-bottom: 0; }
-        input[type="range"], select {
-            width: 100%; padding: 8px; background-color: #2d2d2d;
-            border: 1px solid #444; border-radius: 4px; color: #fff;
-            box-sizing: border-box; margin-top: 4px; font-size: 0.9rem;
-        }
-        input[type="range"] { cursor: pointer; }
         
-        .stream-info-bar {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-top: 10px; padding: 8px 12px; background-color: #1e1e1e;
-            border-radius: 6px; border: 1px solid #2d2d2d;
-        }
+        /* Hidden original controls used by underlying logic */
+        .legacy-hidden { display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🌐 Interactive Screenshare</h1>
+    <h1>🌐 Advanced Interactive Screenshare</h1>
 
     <div class="app-layout">
-        <!-- Sidebar: Channels & Settings (Small part) -->
+        <!-- Sidebar: Channels & Controls -->
         <div class="sidebar">
             <div class="card">
                 <h2>Channels</h2>
+                <p>Choose a channel to host or join instantly[cite: 1].</p>
                 <div class="channel-list">
                     <!-- Channel 1 -->
                     <div class="channel-item">
@@ -130,8 +129,8 @@
                             <div class="channel-status" id="status-1">Idle</div>
                         </div>
                         <div class="button-group">
-                            <button onclick="hostChannel(1)" id="host-btn-1">Host</button>
-                            <button class="join-btn" onclick="joinChannel(1)" id="join-btn-1">Join</button>
+                            <button onclick="selectChannelHost(1)">Host</button>
+                            <button class="join-btn" onclick="selectChannelJoin(1)">Join</button>
                         </div>
                     </div>
 
@@ -142,8 +141,8 @@
                             <div class="channel-status" id="status-2">Idle</div>
                         </div>
                         <div class="button-group">
-                            <button onclick="hostChannel(2)" id="host-btn-2">Host</button>
-                            <button class="join-btn" onclick="joinChannel(2)" id="join-btn-2">Join</button>
+                            <button onclick="selectChannelHost(2)">Host</button>
+                            <button class="join-btn" onclick="selectChannelJoin(2)">Join</button>
                         </div>
                     </div>
 
@@ -154,22 +153,32 @@
                             <div class="channel-status" id="status-3">Idle</div>
                         </div>
                         <div class="button-group">
-                            <button onclick="hostChannel(3)" id="host-btn-3">Host</button>
-                            <button class="join-btn" onclick="joinChannel(3)" id="join-btn-3">Join</button>
+                            <button onclick="selectChannelHost(3)">Host</button>
+                            <button class="join-btn" onclick="selectChannelJoin(3)">Join</button>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div class="card" id="sharerStatusPanelWrapper" style="display:none;">
+                <h2>Host Status</h2>
+                <div id="sharerStatusPanel">
+                    <p style="margin-bottom: 5px;">Active Channel ID:</p>
+                    <div class="status-box" id="myIdDisplay">Connecting...</div>
+                    <button id="startShareBtn" disabled style="width: 100%; margin-top: 8px;">Start Sharing Screen</button>
                 </div>
             </div>
 
             <div class="card">
                 <h2>Stream Settings</h2>
                 <div class="setting-group">
-                    <label for="qualitySelect" style="font-size: 0.85rem; color: #a0a0a0;">Resolution:</label>
+                    <label for="qualitySelect" style="font-size: 0.85rem; color: #a0a0a0;">Resolution & Optimization:</label>
                     <select id="qualitySelect">
-                        <option value="720" selected>720p (60fps Smooth)</option>
-                        <option value="1080">1080p (High Quality)</option>
+                        <option value="720" selected>720p Smooth (60fps Gaming)</option>
+                        <option value="1080">1080p High Quality (Crisp Text)</option>
                     </select>
                 </div>
+
                 <div class="setting-group" style="margin-top: 10px;">
                     <label for="bwSlider" style="font-size: 0.85rem; color: #a0a0a0;">Max Bandwidth: <span id="bwLabel">4000</span> Kbps</label>
                     <input type="range" id="bwSlider" min="500" max="10000" step="500" value="4000">
@@ -177,44 +186,76 @@
             </div>
         </div>
 
-        <!-- Main Content: Stream Window (Majority of the page) -->
+        <!-- Main Content: Large Stream Window -->
         <div class="main-content">
-            <div class="card" style="display: flex; flex-direction: column; flex: 1; margin-bottom: 0;">
-                <h2 id="viewTitle">Stream Window</h2>
-                <div id="pointerOverlay" class="video-container">
-                    <div class="placeholder-text" id="placeholderText">Select a channel to Host or Join to start streaming</div>
-                    <video id="sharedVideo" autoplay playsinline controls></video>
+            <!-- Viewer Stream Container -->
+            <div class="card" id="viewerUI" style="display: flex; flex-direction: column; flex: 1; margin-bottom: 0;">
+                <h2>Live Stream (Click anywhere to point!)[cite: 2]</h2>
+                <div class="video-container">
+                    <video id="remoteVideo" autoplay playsinline controls></video>
                 </div>
-                <div class="stream-info-bar">
-                    <span id="activeInfo" style="font-family: monospace; color: #03dac6; font-size: 0.9rem;">Not Connected</span>
-                    <button class="danger-btn" onclick="leaveChannel()" id="disconnectBtn" style="display: none; flex: 0 0 auto; width: auto; padding: 6px 14px;">Disconnect</button>
+            </div>
+
+            <!-- Sharer Preview Container -->
+            <div class="card" id="sharerPreviewContainer" style="display: none; flex-direction: column; flex: 1; margin-bottom: 0;">
+                <h2>Your Screen Preview (Watch here for viewer clicks)[cite: 2]</h2>
+                <div id="pointerOverlay" class="video-container">
+                    <video id="localPreview" autoplay muted playsinline></video>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Hidden Legacy Elements Required by Underlying System JS -->
+    <div class="legacy-hidden">
+        <input type="checkbox" id="roleToggle">
+        <input type="text" id="customIdInput">
+        <button id="initSharerBtn"></button>
+        <input type="text" id="peerIdInput">
+        <button id="connectToStreamBtn"></button>
+    </div>
 </div>
 
 <script>
+    // --- UNDERLYING SYSTEM LOGIC (PRESERVED FROM ORIGINAL CODE) ---[cite: 2]
+    const roleToggle = document.getElementById('roleToggle');
+    const sharerUI = document.getElementById('sharerUI');
+    const viewerUIEl = document.getElementById('viewerUI');
+
+    // --- SHARED VARIABLES ---
     let peer = null;
     let localStream = null;
-    let activeCall = null;
-    let activeConnection = null;
-    let currentRole = null;
+    let activeCall = null; 
+
+    // --- SHARER LOGIC ---
+    const customIdInput = document.getElementById('customIdInput');
+    const initSharerBtn = document.getElementById('initSharerBtn');
+    const sharerStatusPanel = document.getElementById('sharerStatusPanel');
+    const sharerStatusPanelWrapper = document.getElementById('sharerStatusPanelWrapper');
+    const myIdDisplay = document.getElementById('myIdDisplay');
+    const startShareBtn = document.getElementById('startShareBtn');
+    
+    const sharerPreviewContainer = document.getElementById('sharerPreviewContainer');
+    const localPreview = document.getElementById('localPreview');
+    const pointerOverlay = document.getElementById('pointerOverlay');
 
     const qualitySelect = document.getElementById('qualitySelect');
     const bwSlider = document.getElementById('bwSlider');
     const bwLabel = document.getElementById('bwLabel');
-    
-    const viewTitle = document.getElementById('viewTitle');
-    const sharedVideo = document.getElementById('sharedVideo');
-    const placeholderText = document.getElementById('placeholderText');
-    const pointerOverlay = document.getElementById('pointerOverlay');
-    const activeInfo = document.getElementById('activeInfo');
-    const disconnectBtn = document.getElementById('disconnectBtn');
 
-    bwSlider.addEventListener('input', () => {
+    function generateFallbackId(length = 6) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+
+    function updateBandwidth() {
         const kbps = parseInt(bwSlider.value);
         bwLabel.innerText = kbps;
+
         if (activeCall && activeCall.peerConnection) {
             const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
@@ -224,118 +265,43 @@
                 sender.setParameters(params).catch(console.error);
             }
         }
-    });
-
-    sharedVideo.addEventListener('pause', () => {
-        if (currentRole === 'viewer') sharedVideo.play();
-    });
-
-    function resetUI() {
-        if (peer) {
-            peer.destroy();
-            peer = null;
-        }
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-            localStream = null;
-        }
-        activeCall = null;
-        activeConnection = null;
-        currentRole = null;
-
-        sharedVideo.srcObject = null;
-        placeholderText.style.display = 'block';
-        disconnectBtn.style.display = 'none';
-        activeInfo.innerText = "Not Connected";
-        viewTitle.innerText = "Stream Window";
-
-        for (let i = 1; i <= 3; i++) {
-            document.getElementById(`host-btn-${i}`).disabled = false;
-            document.getElementById(`join-btn-${i}`).disabled = false;
-            document.getElementById(`status-${i}`).innerText = "Idle";
-        }
     }
 
-    function leaveChannel() {
-        resetUI();
-    }
+    bwSlider.addEventListener('input', updateBandwidth);
 
-    async function hostChannel(chNum) {
-        resetUI();
-        currentRole = 'host';
-
-        const hostBtn = document.getElementById(`host-btn-${chNum}`);
-        const joinBtn = document.getElementById(`join-btn-${chNum}`);
-        const statusEl = document.getElementById(`status-${chNum}`);
-
-        hostBtn.disabled = true;
-        joinBtn.disabled = true;
-        statusEl.innerText = "Requesting...";
-
-        try {
-            const is720p = qualitySelect.value === "720";
-            const constraints = is720p ? {
-                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 } },
-                audio: { echoCancellation: false, noiseSuppression: false }
-            } : {
-                video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } },
-                audio: { echoCancellation: false, noiseSuppression: false }
-            };
-
-            localStream = await navigator.mediaDevices.getDisplayMedia(constraints);
-        } catch (err) {
-            console.error("Screen capture error:", err);
-            statusEl.innerText = "Cancelled";
-            hostBtn.disabled = false;
-            joinBtn.disabled = false;
-            return;
+    initSharerBtn.addEventListener('click', () => {
+        let targetId = customIdInput.value.trim().replace(/[^a-zA-Z0-9-_]/g, '');
+        if (!targetId) {
+            targetId = generateFallbackId(6);
         }
 
-        localStream.getVideoTracks()[0].onended = () => {
-            leaveChannel();
-        };
+        initSharerBtn.style.display = 'none';
+        customIdInput.style.display = 'none';
+        sharerStatusPanelWrapper.style.display = 'block';
 
-        statusEl.innerText = "Connecting...";
-        const peerId = `interactive-screenshare-chan-${chNum}`;
-        peer = new Peer(peerId);
+        peer = new Peer(targetId);
 
-        peer.on('open', () => {
-            statusEl.innerText = "Hosting Live";
-            viewTitle.innerText = `Hosting Channel ${chNum} (Preview)`;
-            sharedVideo.srcObject = localStream;
-            sharedVideo.muted = true;
-            placeholderText.style.display = 'none';
-            disconnectBtn.style.display = 'block';
-            activeInfo.innerText = `Channel ${chNum} Active - Waiting for friend to join...`;
+        peer.on('open', (id) => {
+            myIdDisplay.innerText = id;
+            startShareBtn.disabled = false;
+            // Auto trigger sharing start for seamless UX
+            startShareBtn.click();
         });
 
         peer.on('error', (err) => {
             if (err.type === 'unavailable-id') {
-                alert(`Channel ${chNum} is already in use by someone else!`);
+                alert("That channel is already active on the network. Please choose another or try refreshing.");
+                location.reload();
             } else {
                 console.error("Peer error:", err);
             }
-            leaveChannel();
         });
 
         peer.on('connection', (conn) => {
-            activeConnection = conn;
             conn.on('open', () => {
-                activeInfo.innerText = `Channel ${chNum} Connected with Friend!`;
                 if (localStream) {
                     activeCall = peer.call(conn.peer, localStream);
-                    setTimeout(() => {
-                        const kbps = parseInt(bwSlider.value);
-                        if (activeCall && activeCall.peerConnection) {
-                            const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                            if (sender) {
-                                const params = sender.getParameters();
-                                if (!params.encodings) params.encodings = [{}];
-                                params.encodings[0].maxBitrate = kbps * 1000;
-                                sender.setParameters(params).catch(console.error);
-                            }
-                        }
-                    }, 500);
+                    setTimeout(updateBandwidth, 500); 
                 }
             });
 
@@ -349,74 +315,88 @@
                     setTimeout(() => dot.remove(), 1500);
                 }
             });
-
-            conn.on('close', () => {
-                activeInfo.innerText = `Channel ${chNum} Active - Friend disconnected.`;
-            });
         });
-    }
+    });
 
-    function joinChannel(chNum) {
-        resetUI();
-        currentRole = 'viewer';
+    startShareBtn.addEventListener('click', async () => {
+        try {
+            const is720p = qualitySelect.value === "720";
+            const constraints = is720p ? {
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 } },
+                audio: { echoCancellation: false, noiseSuppression: false }
+            } : {
+                video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } },
+                audio: { echoCancellation: false, noiseSuppression: false }
+            };
 
-        const hostBtn = document.getElementById(`host-btn-${chNum}`);
-        const joinBtn = document.getElementById(`join-btn-${chNum}`);
-        const statusEl = document.getElementById(`status-${chNum}`);
+            const newStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+            localStream = newStream;
+            
+            localPreview.srcObject = newStream;
+            viewerUIEl.style.display = 'none';
+            sharerPreviewContainer.style.display = 'flex';
+        } catch (err) {
+            console.error("Screen capture error:", err);
+        }
+    });
 
-        hostBtn.disabled = true;
-        joinBtn.disabled = true;
-        statusEl.innerText = "Connecting...";
+    // --- VIEWER LOGIC ---
+    const peerIdInput = document.getElementById('peerIdInput');
+    const connectToStreamBtn = document.getElementById('connectToStreamBtn');
+    const remoteVideo = document.getElementById('remoteVideo');
 
-        peer = new Peer();
+    remoteVideo.addEventListener('pause', () => { remoteVideo.play(); });
+
+    connectToStreamBtn.addEventListener('click', () => {
+        const targetId = peerIdInput.value.trim();
+        if (!targetId) return alert("Please enter a valid channel ID.");
+
+        connectToStreamBtn.innerText = "Connecting...";
+        peer = new Peer(); 
 
         peer.on('open', () => {
-            const hostPeerId = `interactive-screenshare-chan-${chNum}`;
-            const conn = peer.connect(hostPeerId);
-            activeConnection = conn;
+            const conn = peer.connect(targetId);
+            let isDataChannelOpen = false;
 
-            conn.on('open', () => {
-                statusEl.innerText = "Connected!";
-                viewTitle.innerText = `Watching Channel ${chNum} (Click to point)`;
-                placeholderText.style.display = 'none';
-                disconnectBtn.style.display = 'block';
-                activeInfo.innerText = `Connected to Channel ${chNum}. Click anywhere to point for your friend.`;
-                sharedVideo.muted = false;
+            conn.on('open', () => { isDataChannelOpen = true; });
+            
+            peer.on('call', (call) => {
+                call.answer(); 
+                call.on('stream', (incomingStream) => {
+                    connectToStreamBtn.innerText = "Connected!";
+                    remoteVideo.srcObject = incomingStream;
+                    sharerPreviewContainer.style.display = 'none';
+                    viewerUIEl.style.display = 'flex';
+                });
+            });
+
+            remoteVideo.addEventListener('click', (e) => {
+                if (!isDataChannelOpen) return;
+
+                const rect = remoteVideo.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+
+                conn.send({ type: 'click', x: x, y: y });
             });
 
             conn.on('error', () => {
-                statusEl.innerText = "Failed";
-                alert(`Could not connect to Channel ${chNum}. Make sure your friend is hosting it first.`);
-                leaveChannel();
+                connectToStreamBtn.innerText = "Connection Failed";
             });
         });
+    });
 
-        peer.on('call', (call) => {
-            activeCall = call;
-            call.answer();
-            call.on('stream', (incomingStream) => {
-                sharedVideo.srcObject = incomingStream;
-            });
-            call.on('close', () => {
-                alert("Stream ended by host.");
-                leaveChannel();
-            });
-        });
+    // --- CHANNEL SELECTION WRAPPERS ---
+    function selectChannelHost(chNum) {
+        customIdInput.value = `screenshare-channel-${chNum}`;
+        document.getElementById(`status-${chNum}`).innerText = "Hosting...";
+        initSharerBtn.click();
+    }
 
-        peer.on('error', (err) => {
-            console.error("Peer error:", err);
-            statusEl.innerText = "Error";
-            alert("Connection error occurred.");
-            leaveChannel();
-        });
-
-        sharedVideo.onclick = (e) => {
-            if (!activeConnection || activeConnection.open !== true) return;
-            const rect = sharedVideo.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / rect.width;
-            const y = (e.clientY - rect.top) / rect.height;
-            activeConnection.send({ type: 'click', x: x, y: y });
-        };
+    function selectChannelJoin(chNum) {
+        peerIdInput.value = `screenshare-channel-${chNum}`;
+        document.getElementById(`status-${chNum}`).innerText = "Connecting...";
+        connectToStreamBtn.click();
     }
 </script>
 
